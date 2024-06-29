@@ -110,7 +110,7 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
             }
         }
     }
-    /*
+
     @EventHandler
     public void onEntityExplode(EntityExplodeEvent event) {
         List<Block> nearbyBeds = new ArrayList<>();
@@ -139,7 +139,7 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
     }
 
 
-     */
+
     @EventHandler
     public void onPlayerInteract(PlayerInteractEvent event) {
         Player player = event.getPlayer();
