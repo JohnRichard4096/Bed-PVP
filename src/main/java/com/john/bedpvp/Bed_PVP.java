@@ -1,12 +1,12 @@
 package com.john.bedpvp;
-
 import org.bukkit.Bukkit;
+import org.bukkit.WorldCreator;
+import org.bukkit.command.Command;
+import org.bukkit.command.CommandSender;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockState;
-import org.bukkit.command.Command;
-import org.bukkit.command.CommandSender;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
@@ -17,8 +17,12 @@ import org.bukkit.event.block.Action;
 import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.entity.ProjectileHitEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.server.ServerLoadEvent;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.potion.PotionEffect;
+import org.bukkit.potion.PotionEffectType;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -26,6 +30,7 @@ import java.util.logging.Logger;
 
 public final class Bed_PVP extends JavaPlugin implements Listener {
     private boolean Start = false;
+    private boolean Available = false;
     Logger logger = getLogger();
     @Override
     public void onEnable() {
@@ -45,6 +50,7 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
         }
         logger.info("Registering events......");
         Bukkit.getPluginManager().registerEvents(this, this);
+        logger.info("Remade world ......");
 
         logger.info("Done!");
         // 进行其他启用插件的逻辑
@@ -65,6 +71,15 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
         }
         return true;
     }
+
+    @EventHandler
+    public void onPlayerJoin(PlayerJoinEvent event) {
+        Player player = event.getPlayer();
+
+        // 添加发光效果，时长为无限
+        player.addPotionEffect(new PotionEffect(PotionEffectType.GLOWING, Integer.MAX_VALUE, 1, false, false));
+    }
+
     @EventHandler
     public void onProjectileHit(ProjectileHitEvent event) {
         Projectile projectile = event.getEntity();
@@ -95,6 +110,7 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
             }
         }
     }
+    /*
     @EventHandler
     public void onEntityExplode(EntityExplodeEvent event) {
         List<Block> nearbyBeds = new ArrayList<>();
@@ -122,6 +138,8 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
 
     }
 
+
+     */
     @EventHandler
     public void onPlayerInteract(PlayerInteractEvent event) {
         Player player = event.getPlayer();
@@ -130,6 +148,16 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
                 event.getClickedBlock().setType(Material.AIR); // 将床方块变为空气
                 player.getWorld().createExplosion(event.getClickedBlock().getLocation(), 4F); // 在床位置创建爆炸
                 event.setCancelled(true); // 取消事件，避免床被放置
+
+            }
+        }
+    }
+    @EventHandler
+    public void onServerLoad(ServerLoadEvent event) {
+        if (event.getType() == ServerLoadEvent.LoadType.RELOAD) {
+            getLogger().warning("Server was reloaded! Now will kick all player!!!");
+            for (Player player : Bukkit.getServer().getOnlinePlayers()) {
+                player.kickPlayer("Server was reloaded,but BED-PVP have not reload well yet!");
 
             }
         }
@@ -147,7 +175,12 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
                     """);
 
         }
+        if (label.equalsIgnoreCase("bed-pvp-start")){
+
+
+        }
         return false;
+
     }
 
     public static boolean isBed(Block block) {
