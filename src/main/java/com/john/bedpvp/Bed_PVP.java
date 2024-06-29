@@ -115,7 +115,7 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
     public void onEntityExplode(EntityExplodeEvent event) {
         List<Block> nearbyBeds = new ArrayList<>();
 
-        // 遍历爆炸范围内的方块，将周围的床添加到列表中
+        // 遍历爆炸范围内的方块，将周围的床添加到列表
         for (Block block : event.blockList()) {
             if (isBed(block)) {
                 nearbyBeds.add(block);
