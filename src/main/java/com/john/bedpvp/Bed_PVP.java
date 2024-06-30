@@ -29,7 +29,6 @@ import java.util.logging.Logger;
 
 public final class Bed_PVP extends JavaPlugin implements Listener {
     private boolean Start = false;
-    private boolean Available = false;
     Logger logger = getLogger();
     @Override
     public void onEnable() {
@@ -76,7 +75,13 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
+        if (Start) {
+            // Set the player to spectator mode
+            player.setGameMode(GameMode.SPECTATOR);
 
+            // Send a red-colored message to the player indicating the game has started
+            player.sendMessage(ChatColor.RED + "The game has already started! You are in Spectator mode.");
+        }
         // 添加发光效果，时长为无限
         player.addPotionEffect(new PotionEffect(PotionEffectType.GLOWING, Integer.MAX_VALUE, 1, false, false));
     }
