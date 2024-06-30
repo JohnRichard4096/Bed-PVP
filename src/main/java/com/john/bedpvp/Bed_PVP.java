@@ -35,17 +35,20 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
         // Plugin startup logic
         logger.info("Loading Bed-PVP");
         System.out.println("""
-                 
+                  
                 ***********************
                 *Bed-PVP V0.1-Snapshot*
                 *Loading......        *
                 ***********************
                  
                 """);
+        /*
         if (!checkDependency("WorldEdit")) {
             getLogger().severe("Dependency WorldEdit not found, disabling plugin...");
             getServer().getPluginManager().disablePlugin(this);
         }
+
+         */
         logger.info("Registering events......");
         Bukkit.getPluginManager().registerEvents(this, this);
 
