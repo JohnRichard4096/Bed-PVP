@@ -1,16 +1,14 @@
 package com.john.bedpvp;
-import org.bukkit.Bukkit;
-import org.bukkit.WorldCreator;
+import org.bukkit.*;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
-import org.bukkit.Material;
-import org.bukkit.World;
+import org.bukkit.entity.*;
+import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.EntityDeathEvent;
+import org.bukkit.inventory.meta.FireworkMeta;
+import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockState;
-import org.bukkit.entity.EntityType;
-import org.bukkit.entity.Player;
-import org.bukkit.entity.Projectile;
-import org.bukkit.entity.TNTPrimed;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
@@ -26,6 +24,7 @@ import org.bukkit.potion.PotionEffectType;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 import java.util.logging.Logger;
 
 public final class Bed_PVP extends JavaPlugin implements Listener {
@@ -50,6 +49,8 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
         }
         logger.info("Registering events......");
         Bukkit.getPluginManager().registerEvents(this, this);
+
+
         logger.info("Remade world ......");
 
         logger.info("Done!");
@@ -82,6 +83,7 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
 
     @EventHandler
     public void onProjectileHit(ProjectileHitEvent event) {
+        if (!Start) return;//没有开始时则返回
         Projectile projectile = event.getEntity();
         if (projectile.getShooter() instanceof Player && projectile.getType() == EntityType.ARROW) {
             Block hitBlock = event.getHitBlock();
@@ -110,11 +112,72 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
             }
         }
     }
+    @EventHandler
+    public void onPlayerDeath(EntityDeathEvent event) {
+        // 确认死亡实体是玩家
+        if (!(event.getEntity() instanceof Player)) return;
+        Player deadPlayer = (Player) event.getEntity();
+        EntityDamageEvent damageEvent = deadPlayer.getLastDamageCause();
+        if (damageEvent != null) {
+            if (damageEvent.getCause() != EntityDamageEvent.DamageCause.ENTITY_EXPLOSION||damageEvent.getCause() != EntityDamageEvent.DamageCause.BLOCK_EXPLOSION) {
+            }
+            return;
+            // 如果不是被炸死，直接结束此方法
+        }
+         int onlinePlayersCount = 0;
+        for (Player player : deadPlayer.getServer().getOnlinePlayers()) {
+            if (player.getGameMode() != GameMode.SPECTATOR) { // 排除旁观者模式的玩家
+                onlinePlayersCount++;
+            }
+        }
+
+        // 当在线非旁观者玩家等于2时，死亡的玩家被踢出并发送消息
+        if (onlinePlayersCount == 2) {
+            deadPlayer.kickPlayer(ChatColor.RED + "You lost the game.");
+            return;
+        }
+
+        // 当只剩下一名非旁观者玩家时，该玩家获胜
+        if (onlinePlayersCount == 1) {
+            Player lastPlayer = deadPlayer.getServer().getOnlinePlayers().stream()
+                    .filter(p -> p.getGameMode() != GameMode.SPECTATOR)
+                    .findFirst()
+                    .orElse(null);
+            if (lastPlayer != null) {
+                // 发送获胜消息并生成烟花庆祝
+                lastPlayer.sendTitle(ChatColor.YELLOW + "Congratulations!", ChatColor.GREEN + "You are the last survivor!", 10, 70, 20);
+
+                Location playerLocation = lastPlayer.getLocation();
+                for (int i = 0; i < 10; i++) {
+                    Firework fw = (Firework) lastPlayer.getWorld().spawnEntity(playerLocation.add(new Random().nextInt(15) - 7, new Random().nextInt(5), new Random().nextInt(15) - 7), EntityType.FIREWORK);
+                    FireworkMeta fwm = fw.getFireworkMeta();
+                    fwm.addEffect(FireworkEffect.builder().with(FireworkEffect.Type.BURST).withColor(Color.YELLOW).flicker(true).trail(true).build());
+                    fwm.setPower(1);
+                    fw.setFireworkMeta(fwm);
+                }
+
+                // 5秒后踢出最后的玩家并结束游戏
+                new BukkitRunnable() {
+                    @Override
+                    public void run() {
+                        lastPlayer.kickPlayer(ChatColor.YELLOW + "Game over! You won!");
+                    }
+                }.runTaskLater(this, 20 * 5); // 延迟5秒（100ticks=5秒）
+            }
+            Start = false;
+            logger.info("Game over!");
+        } else if (onlinePlayersCount >= 3) {
+            // 切换玩家到旁观者模式
+            deadPlayer.setGameMode(GameMode.SPECTATOR);
+            deadPlayer.sendMessage(ChatColor.RED + "You were killed and switched to Spectator mode.");
+        }
+    }
+
 
     @EventHandler
     public void onEntityExplode(EntityExplodeEvent event) {
         List<Block> nearbyBeds = new ArrayList<>();
-
+        if (!Start) return;//没有开始时则返回
         // 遍历爆炸范围内的方块，将周围的床添加到列表
         for (Block block : event.blockList()) {
             if (isBed(block)) {
@@ -142,6 +205,7 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
 
     @EventHandler
     public void onPlayerInteract(PlayerInteractEvent event) {
+        if (!Start) return;//没有开始时则返回
         Player player = event.getPlayer();
         if (event.getAction() == Action.LEFT_CLICK_BLOCK && player.getInventory().getItemInMainHand().getType() == Material.AIR) {
             if (event.getClickedBlock() != null && isBed(event.getClickedBlock()) && event.getClickedBlock().getWorld().getEnvironment() == World.Environment.NORMAL) {
@@ -175,9 +239,63 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
                     """);
 
         }
-        if (label.equalsIgnoreCase("bed-pvp-start")){
+        if (label.equalsIgnoreCase("bed-pvp-start")) {
+            logger.info("Game start!");
+            if (sender.hasPermission("bedpvp.start") || sender.isOp()) {
+                int onlinePlayersCount = Bukkit.getOnlinePlayers().size();
+                if (onlinePlayersCount < 3) {
+                    sender.sendMessage(ChatColor.RED + "Not enough players online. At least 3 players are required to start Bed-PVP.");
+                    return true; // 玩家数量不足，直接返回不执行后续逻辑
+                }
+
+                sender.sendMessage(ChatColor.GREEN + "Starting Bed-PVP in 5 seconds...");
+
+                // 创建一个异步任务来发送标题、播放音效并在倒计时后改变布尔值
+                new BukkitRunnable() {
+                    int countdown = 5;
+
+                    @Override
+                    public void run() {
+                        if (countdown <= 0) {
+                            // 在正式开始前再次检查玩家数量，以防在倒计时期间有玩家离开
+                            if (Bukkit.getOnlinePlayers().size() < 3) {
+                                sender.sendMessage(ChatColor.RED + "Player count dropped below minimum during countdown. Aborting start.");
+                                cancel();
+                                return;
+                            }
+
+                            // 倒计时结束，改变布尔值并发送广播及播放末影龙音效
+                            Start = true;
+                            String titleMessage = ChatColor.translateAlternateColorCodes('&', "&aBed-PVP has been started!");
+                            for (Player onlinePlayer : Bukkit.getOnlinePlayers()) {
+                                onlinePlayer.sendTitle(titleMessage, "", 10, 70, 20);
+                                onlinePlayer.playSound(onlinePlayer.getLocation(), Sound.ENTITY_ENDER_DRAGON_GROWL, 1, 1); // 末影龙音效
+                            }
+                            cancel(); // 结束任务
+                        } else {
+                            // 发送倒计时到操作者并播放音符盒音效
+                            sender.sendMessage(ChatColor.YELLOW + "BedPvp will start after " + countdown + "...");
+                            for (Player player : Bukkit.getOnlinePlayers()) {
+                                player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_HARP, 1, 1); // 音符盒的do音
+                            }
+                            countdown--;
+                        }
+                    }
+                }.runTaskTimer(this, 0L, 20L); // 每20ticks（1秒）执行一次
+            } else {
+                sender.sendMessage(ChatColor.RED + "You don't have the permission to start Bed-PVP.");
+            }
+        }
 
 
+        if (label.equalsIgnoreCase("bed-pvp-stop")) {
+            if (sender.hasPermission("bedpvp.stop") || sender.isOp()) {
+                logger.info("Game stop!");
+                Start = false;
+                sender.sendMessage("Bed-PVP has been stopped!");
+            } else {
+                sender.sendMessage("You don't have the permission to stop Bed-PVP.");
+            }
         }
         return false;
 
