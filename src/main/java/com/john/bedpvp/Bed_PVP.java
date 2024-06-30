@@ -91,35 +91,27 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
 
     @EventHandler
     public void onProjectileHit(ProjectileHitEvent event) {
-        if (!Start) return;//没有开始时则返回
+        if (!Start) return; // 如果未开始，则直接返回
+
         Projectile projectile = event.getEntity();
         if (projectile.getShooter() instanceof Player && projectile.getType() == EntityType.ARROW) {
             Block hitBlock = event.getHitBlock();
 
-            if (hitBlock.getWorld().getEnvironment()==World.Environment.NORMAL){
-                if(hitBlock.getType()==Material.WHITE_BED  &&hitBlock != null){
+            // 判断世界类型并检查是否击中了床
+            if (hitBlock != null) {
+                if (hitBlock.getWorld().getEnvironment() == World.Environment.NORMAL && hitBlock.getType() == Material.WHITE_BED || hitBlock.getWorld().getEnvironment() != World.Environment.NORMAL && isBed(hitBlock)) {
+
                     BlockState bedState = hitBlock.getState();
                     bedState.setType(Material.AIR);
-                    bedState.update();
+                    bedState.update(); // 移除床
 
-                    TNTPrimed tnt = (TNTPrimed) hitBlock.getWorld().spawnEntity(projectile.getLocation(), EntityType.PRIMED_TNT);
-                    tnt.setFuseTicks(0);
+                    // 在箭矢位置直接产生爆炸效果
+                    hitBlock.getWorld().createExplosion(projectile.getLocation(), 4.0F, true, false);
                 }
-
-            }
-            else if(hitBlock.getWorld().getEnvironment()!=World.Environment.NORMAL){
-                if(hitBlock != null && isBed(hitBlock)){
-                    BlockState bedState = hitBlock.getState();
-                    bedState.setType(Material.AIR);
-                    bedState.update();
-
-                    TNTPrimed tnt = (TNTPrimed) hitBlock.getWorld().spawnEntity(projectile.getLocation(), EntityType.PRIMED_TNT);
-                    tnt.setFuseTicks(0);
-                }
-
             }
         }
     }
+
     @EventHandler
     public void onPlayerDeath(EntityDeathEvent event) {
         // 确认死亡实体是玩家
@@ -185,29 +177,30 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
     @EventHandler
     public void onEntityExplode(EntityExplodeEvent event) {
         List<Block> nearbyBeds = new ArrayList<>();
-        if (!Start) return;//没有开始时则返回
-        // 遍历爆炸范围内的方块，将周围的床添加到列表
+
+        // 检查是否开始，未开始则提前返回
+        if (!Start) return;
+
+        // 遍历爆炸影响的方块，找出周围的床并记录
         for (Block block : event.blockList()) {
             if (isBed(block)) {
                 nearbyBeds.add(block);
             }
         }
 
-        // 移除周围的其他床
+        // 清除不在爆炸列表中的床，防止重复作用
         for (Block bed : nearbyBeds) {
             if (!event.blockList().contains(bed)) {
-                bed.setType(Material.AIR);
+                bed.setType(Material.AIR); // 将床移除，替换为空气
             }
         }
 
-        // 生成多个TNT
+        // 对每个找到的床所在位置直接触发爆炸效果
         for (Block bed : nearbyBeds) {
-            TNTPrimed tnt = (TNTPrimed) bed.getWorld().spawnEntity(bed.getLocation(), EntityType.PRIMED_TNT);
-            tnt.setFuseTicks(0);
+            bed.getWorld().createExplosion(bed.getLocation(), 4.0F, true, false); // 参数调整以适应需求
         }
-
-
     }
+
 
 
 
