@@ -2,16 +2,12 @@ package com.john.bedpvp;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.TextColor;
 import org.bukkit.*;
-import org.bukkit.advancement.Advancement;
-import org.bukkit.advancement.AdvancementProgress;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.*;
 import org.bukkit.event.entity.EntityDamageEvent;
-import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
-import org.bukkit.event.player.PlayerMoveEvent;
-import org.bukkit.event.player.PlayerPortalEvent;
+import org.bukkit.event.player.*;
 import org.bukkit.inventory.meta.FireworkMeta;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.block.Block;
@@ -21,14 +17,15 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.entity.ProjectileHitEvent;
-import org.bukkit.event.player.PlayerInteractEvent;
-import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.server.ServerLoadEvent;
-import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
+import org.codehaus.plexus.util.FileUtils;
 
+import java.io.File;
+import java.io.IOException;
+import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
@@ -36,10 +33,12 @@ import java.util.logging.Logger;
 
 public final class Bed_PVP extends JavaPlugin implements Listener {
     private boolean Start = false;
+    private boolean Available = false;
     Logger logger = getLogger();
     @Override
     public void onEnable() {
         // Plugin startup logic
+        super.onEnable();
         logger.info("Loading Bed-PVP");
         System.out.println("""
                   
@@ -59,7 +58,10 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
         logger.info("Registering events......");
         Bukkit.getPluginManager().registerEvents(this, this);
         // 设置出生点为(0, ~, 0)
-        World world = getServer().getWorld("world"); // 替换为您的世界名称
+
+        logger.info("Creating world......");
+       remadeWorld();
+        World world = getServer().getWorld("bed_world"); // 替换为您的世界名称
         if (world != null) {
             world.setSpawnLocation(0, world.getHighestBlockYAt(0, 0), 0);
         } else {
@@ -75,8 +77,7 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
 
         // 可选：如果玩家超出边界，可以设置不同的处理方式，比如传送回中心点
         getLogger().info("World border set and player movement restricted to a 19x19 block area around (0, 0).");
-
-
+        Available = true;
 
 
         logger.info("Done!");
@@ -92,6 +93,7 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
         logger.info("Disabling plugin......");
         logger.info("Done!");
     }
+    /*
     private boolean checkDependency(String dependencyName) {
         Plugin plugin = getServer().getPluginManager().getPlugin(dependencyName);
         if (plugin == null) {
@@ -99,6 +101,9 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
         }
         return true;
     }
+
+     */
+
     public class SpawnSheepTask implements Runnable {
 
         @Override
@@ -106,7 +111,7 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
             if (!Start) return;
 
             // 直接获取主世界
-            World mainWorld = Bukkit.getWorld("world");
+            World mainWorld = Bukkit.getWorld("bed_world");
 
             if (mainWorld != null) {
                 for (int i = 0; i < 5; i++) { // 生成5只动物
@@ -146,14 +151,11 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
         }
     }
     @EventHandler
-    public void onPlayerTryEnterNether(PlayerPortalEvent event) {
-        // 检查玩家是否尝试通过传送门进入下界
-        if (event.getCause() == PlayerPortalEvent.TeleportCause.NETHER_PORTAL) {
-            // 取消事件，阻止玩家进入下界
-            event.setCancelled(true);
-            // 发送消息给玩家
-            event.getPlayer().sendMessage("No!!!You can't enter nether!!!");
-        }
+    public void onPlayerTryEnterAnyPortal(PlayerPortalEvent event) {
+        // 取消任何传送门事件，阻止玩家通过传送门进入任何维度
+        event.setCancelled(true);
+        // 发送消息给玩家
+        event.getPlayer().sendMessage("No matter where you want to go, you can't enter any portal now!");
     }
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
@@ -164,6 +166,15 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
 
             // Send a red-colored message to the player indicating the game has started
             player.sendMessage(ChatColor.RED + "The game has already started! You are in Spectator mode.");
+        }
+        if(!Available){
+            player.kickPlayer(ChatColor.RED + "Game is not available yet,please wait for some time");
+        }
+        World targetWorld = Bukkit.getWorld("bed_world");
+        if (targetWorld != null) {
+            player.teleport(targetWorld.getSpawnLocation());
+        } else {
+            getLogger().warning("bed_world not found!!!");
         }
         // Clear the player's inventory when they join
         // If the game hasn't started, set the player to survival mode
@@ -190,7 +201,44 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
     }
 
 
+    private void remadeWorld(){
+        for (Player player : Bukkit.getServer().getOnlinePlayers()) {
+            player.kickPlayer("Bed pvp will re-create world!");
+        }
+        Available = false;
+        File bedWorldFolder = new File(Bukkit.getWorldContainer(), "bed_world");
 
+        if (bedWorldFolder.exists()) {
+            try {
+                FileUtils.deleteDirectory(bedWorldFolder);
+            } catch (IOException e) {
+                getLogger().severe("Error while removing old world because：" + e.getMessage());
+                Bukkit.shutdown();
+                return;
+            }
+        }
+
+
+        // 创建新的bed_world
+        WorldCreator bedWorldCreator = new WorldCreator("bed_world").seed(generateRandomInt(-922337203,922337203));
+        World bedWorld = Bukkit.createWorld(bedWorldCreator);
+
+        Location spawnLocation = new Location(bedWorld, 0.0, bedWorld.getHighestBlockYAt(0, 0) + 1, 0.0);
+        bedWorld.setSpawnLocation(spawnLocation);
+        bedWorld.setGameRule(GameRule.DO_MOB_SPAWNING, true); // 允许生物生成
+        bedWorld.setStorm(false); // 设置无雨
+        bedWorld.setThundering(false);// 设置无雷暴
+        bedWorld.setDifficulty(Difficulty.HARD);
+        bedWorld.setTime(6000L); // 设定时间为白天
+        Available = true;
+    }
+    private static final SecureRandom RANDOM = new SecureRandom();
+
+    public static long generateRandomInt(long min, long max) {
+        // nextInt()方法的参数是取值范围，因此max - min + 1是实际的取值范围大小
+        // 加上min是为了将随机数映射到min到max的范围内
+        return RANDOM.nextLong(max - min + 1) + min;
+    }
     @EventHandler
     public void onProjectileHit(ProjectileHitEvent event) {
         if (!Start) return; // 如果未开始，则直接返回
@@ -237,7 +285,9 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
         EntityDamageEvent damageEvent = deadPlayer.getLastDamageCause();
         if (damageEvent != null) {
             if (damageEvent.getCause() != EntityDamageEvent.DamageCause.ENTITY_EXPLOSION && damageEvent.getCause() != EntityDamageEvent.DamageCause.BLOCK_EXPLOSION) {
+                event.getDrops().clear();
                 return;
+
             }
 
             // 如果不是被炸死，直接结束此方法
@@ -252,10 +302,44 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
         // 当在线非旁观者玩家等于2时，死亡的玩家被踢出并发送消息
         if (onlinePlayersCount == 2) {
             deadPlayer.kickPlayer(ChatColor.RED + "You lost the game.");
-            onlinePlayersCount=0;
-            for (Player player : deadPlayer.getServer().getOnlinePlayers()) {
-                if (player.getGameMode() != GameMode.SPECTATOR) { // 排除旁观者模式的玩家
-                    onlinePlayersCount++;
+            onlinePlayersCount=1;
+            if (onlinePlayersCount == 1){
+                Player lastPlayer = deadPlayer.getServer().getOnlinePlayers().stream()
+                        .filter(p -> p.getGameMode() != GameMode.SPECTATOR)
+                        .findFirst()
+                        .orElse(null);
+                if (lastPlayer != null) {
+                    // 发送获胜消息并生成烟花庆祝
+                    lastPlayer.sendTitle(ChatColor.YELLOW + "Congratulations!", ChatColor.GREEN + "You are the last survivor!", 10, 70, 20);
+                    Location playerLocation = lastPlayer.getLocation();
+                    for (int i = 0; i < 10; i++) {
+                        Firework fw = (Firework) lastPlayer.getWorld().spawnEntity(playerLocation.add(new Random().nextInt(15) - 7, new Random().nextInt(5), new Random().nextInt(15) - 7), EntityType.FIREWORK);
+                        FireworkMeta fwm = fw.getFireworkMeta();
+                        fwm.addEffect(FireworkEffect.builder().with(FireworkEffect.Type.BURST).withColor(Color.YELLOW).flicker(true).trail(true).build());
+                        fwm.setPower(2);
+                        fw.setFireworkMeta(fwm);
+                        try {
+                            Thread.sleep(100);
+                        } catch (InterruptedException e) {
+                            throw new RuntimeException(e);
+                        }
+                    }
+
+                    // 5秒后踢出最后的玩家并结束游戏
+                    new BukkitRunnable() {
+                        @Override
+                        public void run() {
+                            for (Player player : Bukkit.getServer().getOnlinePlayers()) {
+                                player.kickPlayer("Bed-PVP game has over. See you next time!");
+                            }
+                            lastPlayer.kickPlayer(ChatColor.YELLOW + "Game over! You won!");
+                            Start = false;
+                        }
+                    }.runTaskLater(this, 20 * 5); // 延迟5秒（100ticks=5秒）
+
+                    logger.info("Game over!");
+                    Available = false;
+                    remadeWorld();
                 }
             }
 
@@ -265,37 +349,7 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
             deadPlayer.setGameMode(GameMode.SPECTATOR);
             deadPlayer.sendMessage(ChatColor.RED + "You were killed and switched to Spectator mode.");
         }
-        if (onlinePlayersCount == 1){
-            Player lastPlayer = deadPlayer.getServer().getOnlinePlayers().stream()
-                    .filter(p -> p.getGameMode() != GameMode.SPECTATOR)
-                    .findFirst()
-                    .orElse(null);
-            if (lastPlayer != null) {
-                // 发送获胜消息并生成烟花庆祝
-                lastPlayer.sendTitle(ChatColor.YELLOW + "Congratulations!", ChatColor.GREEN + "You are the last survivor!", 10, 70, 20);
-                Location playerLocation = lastPlayer.getLocation();
-                for (int i = 0; i < 10; i++) {
-                    Firework fw = (Firework) lastPlayer.getWorld().spawnEntity(playerLocation.add(new Random().nextInt(15) - 7, new Random().nextInt(5), new Random().nextInt(15) - 7), EntityType.FIREWORK);
-                    FireworkMeta fwm = fw.getFireworkMeta();
-                    fwm.addEffect(FireworkEffect.builder().with(FireworkEffect.Type.BURST).withColor(Color.YELLOW).flicker(true).trail(true).build());
-                    fwm.setPower(1);
-                    fw.setFireworkMeta(fwm);
-                }
 
-                // 5秒后踢出最后的玩家并结束游戏
-                new BukkitRunnable() {
-                    @Override
-                    public void run() {
-                        for (Player player : Bukkit.getServer().getOnlinePlayers()) {
-                            player.kickPlayer("Bed-PVP game has over. See you next time!");
-                        }
-                        lastPlayer.kickPlayer(ChatColor.YELLOW + "Game over! You won!");
-                    }
-                }.runTaskLater(this, 20 * 5); // 延迟5秒（100ticks=5秒）
-                Start = false;
-                logger.info("Game over!");
-            }
-        }
     }
 
 
@@ -474,6 +528,8 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
                 for (Player player : Bukkit.getServer().getOnlinePlayers()) {
                     player.kickPlayer("Bed-PVP game has stopped. See you next time!");
                 }
+                logger.info("Remade word......");
+                remadeWorld();
             } else {
                 sender.sendMessage("You don't have the permission to stop Bed-PVP.");
             }
