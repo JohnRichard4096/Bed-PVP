@@ -59,7 +59,7 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
         logger.info("Registering events......");
         Bukkit.getPluginManager().registerEvents(this, this);
         // 设置出生点为(0, ~, 0)
-        World world = getServer().getWorld("your_world_name"); // 替换为您的世界名称
+        World world = getServer().getWorld("world"); // 替换为您的世界名称
         if (world != null) {
             world.setSpawnLocation(0, world.getHighestBlockYAt(0, 0), 0);
         } else {
@@ -103,17 +103,23 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
 
         @Override
         public void run() {
-            if(!Start)return;
-            for (World world : Bukkit.getWorlds()) {
+            if (!Start) return;
+
+            // 直接获取主世界
+            World mainWorld = Bukkit.getWorld("world");
+
+            if (mainWorld != null) {
                 for (int i = 0; i < 5; i++) { // 生成5只动物
-                    Location randomLocation = getRandomSafeLocation(world);
+                    Location randomLocation = getRandomSafeLocation(mainWorld);
                     if (randomLocation != null) {
-                        world.spawnEntity(randomLocation, EntityType.SHEEP);
-                        world.spawnEntity(randomLocation, EntityType.COW);
-                        world.spawnEntity(randomLocation, EntityType.HORSE);
+                        mainWorld.spawnEntity(randomLocation, EntityType.SHEEP);
+                        mainWorld.spawnEntity(randomLocation, EntityType.COW);
+                        mainWorld.spawnEntity(randomLocation, EntityType.HORSE);
                     }
                 }
-                broadcastMessage("Some animals was born at world " + world.getName());
+                broadcastMessage("Some animals were born in the main world.");
+            } else {
+                getLogger().warning("Main world not found!");
             }
         }
 
@@ -209,7 +215,6 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
     }
     @EventHandler
     public void onEntityDamage(EntityDamageEvent event) {
-        Player player = (Player) event.getEntity();
         if (event.getEntity() instanceof Player) {
             if (event.getCause() == EntityDamageEvent.DamageCause.FALL) {
                     // 取消摔落伤害
@@ -231,7 +236,7 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
         Player deadPlayer = (Player) event.getEntity();
         EntityDamageEvent damageEvent = deadPlayer.getLastDamageCause();
         if (damageEvent != null) {
-            if (damageEvent.getCause() == EntityDamageEvent.DamageCause.ENTITY_EXPLOSION) {
+            if (damageEvent.getCause() != EntityDamageEvent.DamageCause.ENTITY_EXPLOSION && damageEvent.getCause() != EntityDamageEvent.DamageCause.BLOCK_EXPLOSION) {
                 return;
             }
 
@@ -247,11 +252,20 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
         // 当在线非旁观者玩家等于2时，死亡的玩家被踢出并发送消息
         if (onlinePlayersCount == 2) {
             deadPlayer.kickPlayer(ChatColor.RED + "You lost the game.");
-            return;
-        }
+            onlinePlayersCount=0;
+            for (Player player : deadPlayer.getServer().getOnlinePlayers()) {
+                if (player.getGameMode() != GameMode.SPECTATOR) { // 排除旁观者模式的玩家
+                    onlinePlayersCount++;
+                }
+            }
 
-        // 当只剩下一名非旁观者玩家时，该玩家获胜
-        if (onlinePlayersCount == 1) {
+        }
+        else if (onlinePlayersCount > 2) {
+            // 切换玩家到旁观者模式
+            deadPlayer.setGameMode(GameMode.SPECTATOR);
+            deadPlayer.sendMessage(ChatColor.RED + "You were killed and switched to Spectator mode.");
+        }
+        if (onlinePlayersCount == 1){
             Player lastPlayer = deadPlayer.getServer().getOnlinePlayers().stream()
                     .filter(p -> p.getGameMode() != GameMode.SPECTATOR)
                     .findFirst()
@@ -278,13 +292,9 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
                         lastPlayer.kickPlayer(ChatColor.YELLOW + "Game over! You won!");
                     }
                 }.runTaskLater(this, 20 * 5); // 延迟5秒（100ticks=5秒）
+                Start = false;
+                logger.info("Game over!");
             }
-            Start = false;
-            logger.info("Game over!");
-        } else if (onlinePlayersCount >= 2) {
-            // 切换玩家到旁观者模式
-            deadPlayer.setGameMode(GameMode.SPECTATOR);
-            deadPlayer.sendMessage(ChatColor.RED + "You were killed and switched to Spectator mode.");
         }
     }
 
@@ -397,6 +407,10 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
 
         }
         if (label.equalsIgnoreCase("bed-pvp-start")) {
+            if (Start) {
+                sender.sendMessage(ChatColor.RED + "Game has already started!");
+                return true;
+            }
             logger.info("Game start!");
             if (sender.hasPermission("bedpvp.start") || sender.isOp()) {
                 int onlinePlayersCount = Bukkit.getOnlinePlayers().size();
@@ -415,8 +429,9 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
                     public void run() {
                         if (countdown <= 0) {
                             // 在正式开始前再次检查玩家数量，以防在倒计时期间有玩家离开
-                            if (Bukkit.getOnlinePlayers().size() < 3) {
+                            if (Bukkit.getOnlinePlayers().size() < 2) {
                                 sender.sendMessage(ChatColor.RED + "Player count dropped below minimum during countdown. Aborting start.");
+                                logger.info("Abort start!");
                                 cancel();
                                 return;
                             }
