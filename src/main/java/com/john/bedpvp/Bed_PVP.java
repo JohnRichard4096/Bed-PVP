@@ -284,12 +284,7 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
 
         // 设定时间为白天 (6000L 对应于中午)
         bedWorld.setTime(6000L);
-        if (world != null) {
-            world.setSpawnLocation(0, world.getHighestBlockYAt(0, 0), 0);
-        } else {
-            getLogger().severe("Failed to set spawn point: World not found.");
-            return;
-        }
+        bedWorld.setSpawnLocation(0, world.getHighestBlockYAt(0, 0), 0);
 
         // 限制玩家活动范围
         int radius = 19; // 19x19区块的半径
