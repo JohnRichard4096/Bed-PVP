@@ -1,10 +1,17 @@
 package com.john.bedpvp;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.TextColor;
 import org.bukkit.*;
+import org.bukkit.advancement.Advancement;
+import org.bukkit.advancement.AdvancementProgress;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.*;
 import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
+import org.bukkit.event.player.PlayerMoveEvent;
+import org.bukkit.event.player.PlayerPortalEvent;
 import org.bukkit.inventory.meta.FireworkMeta;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.block.Block;
@@ -51,11 +58,29 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
          */
         logger.info("Registering events......");
         Bukkit.getPluginManager().registerEvents(this, this);
+        // 设置出生点为(0, ~, 0)
+        World world = getServer().getWorld("your_world_name"); // 替换为您的世界名称
+        if (world != null) {
+            world.setSpawnLocation(0, world.getHighestBlockYAt(0, 0), 0);
+        } else {
+            getLogger().severe("Failed to set spawn point: World not found.");
+            return;
+        }
+
+        // 限制玩家活动范围
+        int radius = 19; // 19x19区块的半径
+        WorldBorder worldBorder = world.getWorldBorder();
+        worldBorder.setCenter(0, 0); // 设置世界边界的中心点
+        worldBorder.setSize(radius * 512, 0); // 设置世界边界的大小，1区块=16格，所以19区块=19*16=304格，乘以2得到直径
+
+        // 可选：如果玩家超出边界，可以设置不同的处理方式，比如传送回中心点
+        getLogger().info("World border set and player movement restricted to a 19x19 block area around (0, 0).");
 
 
-        logger.info("Remade world ......");
+
 
         logger.info("Done!");
+        getServer().getScheduler().runTaskTimer(this, new SpawnSheepTask(), 0L, 20 * 60 * 3);
         // 进行其他启用插件的逻辑
     }
 
@@ -74,7 +99,56 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
         }
         return true;
     }
+    public class SpawnSheepTask implements Runnable {
 
+        @Override
+        public void run() {
+            if(!Start)return;
+            for (World world : Bukkit.getWorlds()) {
+                for (int i = 0; i < 5; i++) { // 生成5只动物
+                    Location randomLocation = getRandomSafeLocation(world);
+                    if (randomLocation != null) {
+                        world.spawnEntity(randomLocation, EntityType.SHEEP);
+                        world.spawnEntity(randomLocation, EntityType.COW);
+                        world.spawnEntity(randomLocation, EntityType.HORSE);
+                    }
+                }
+                broadcastMessage("Some animals was born at world " + world.getName());
+            }
+        }
+
+        private Location getRandomSafeLocation(World world) {
+            // 获取世界的边界
+            WorldBorder worldBorder = world.getWorldBorder();
+            int borderSize = (int) worldBorder.getSize() / 2;
+
+            Random random = new Random();
+            while (true) {
+                double x = random.nextDouble(-borderSize, borderSize);
+                double z = random.nextDouble(-borderSize, borderSize);
+                Location location = new Location(world, x, world.getHighestBlockYAt((int)x, (int)z), z);
+
+                // 确保位置在世界边界内且上方有块固体方块供羊站立
+                if (worldBorder.isInside(location) && location.getBlock().getType().isSolid()) {
+                    return location;
+                }
+            }
+        }
+
+        private void broadcastMessage(String message) {
+            Bukkit.broadcast(Component.text(message).color(TextColor.fromCSSHexString("#00FF00"))); // 绿色文字
+        }
+    }
+    @EventHandler
+    public void onPlayerTryEnterNether(PlayerPortalEvent event) {
+        // 检查玩家是否尝试通过传送门进入下界
+        if (event.getCause() == PlayerPortalEvent.TeleportCause.NETHER_PORTAL) {
+            // 取消事件，阻止玩家进入下界
+            event.setCancelled(true);
+            // 发送消息给玩家
+            event.getPlayer().sendMessage("No!!!You can't enter nether!!!");
+        }
+    }
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
@@ -85,9 +159,31 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
             // Send a red-colored message to the player indicating the game has started
             player.sendMessage(ChatColor.RED + "The game has already started! You are in Spectator mode.");
         }
-        // 添加发光效果，时长为无限
+        // Clear the player's inventory when they join
+        // If the game hasn't started, set the player to survival mode
+        player.setGameMode(GameMode.SURVIVAL);
+
+        // Clear inventory and add glowing effect as before
+        player.getInventory().clear();
         player.addPotionEffect(new PotionEffect(PotionEffectType.GLOWING, Integer.MAX_VALUE, 1, false, false));
+
+        // Teleport the player to coordinates (0, ~, 0) at the highest solid block
+        Location spawnLocation = new Location(player.getWorld(), 0.0, player.getWorld().getHighestBlockYAt(0, 0), 0.0);
+        player.teleport(spawnLocation);
+        player.setExp(0);
+        player.setLevel(0);
+        player.setTotalExperience(0);
+
     }
+    private void sendNotStartedTitle(Player player) {
+        player.sendTitle(
+                ChatColor.RED + "Game Not Started",
+                ChatColor.GRAY + "Please wait for the game to begin.",
+                10, 70, 20 // 分别代表：显示时间、持续时间、消失时间，单位均为ticks（1秒=20ticks）
+        );
+    }
+
+
 
     @EventHandler
     public void onProjectileHit(ProjectileHitEvent event) {
@@ -111,17 +207,34 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
             }
         }
     }
+    @EventHandler
+    public void onEntityDamage(EntityDamageEvent event) {
+        Player player = (Player) event.getEntity();
+        if (event.getEntity() instanceof Player) {
+            if (event.getCause() == EntityDamageEvent.DamageCause.FALL) {
+                    // 取消摔落伤害
+                    event.setCancelled(true);
+            }
+            if(!Start){
+                event.setCancelled(true);
+            }
 
+        }
+    }
     @EventHandler
     public void onPlayerDeath(EntityDeathEvent event) {
         // 确认死亡实体是玩家
+        if (!Start){
+            return;
+        }
         if (!(event.getEntity() instanceof Player)) return;
         Player deadPlayer = (Player) event.getEntity();
         EntityDamageEvent damageEvent = deadPlayer.getLastDamageCause();
         if (damageEvent != null) {
-            if (damageEvent.getCause() != EntityDamageEvent.DamageCause.ENTITY_EXPLOSION||damageEvent.getCause() != EntityDamageEvent.DamageCause.BLOCK_EXPLOSION) {
+            if (damageEvent.getCause() == EntityDamageEvent.DamageCause.ENTITY_EXPLOSION) {
+                return;
             }
-            return;
+
             // 如果不是被炸死，直接结束此方法
         }
          int onlinePlayersCount = 0;
@@ -146,7 +259,6 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
             if (lastPlayer != null) {
                 // 发送获胜消息并生成烟花庆祝
                 lastPlayer.sendTitle(ChatColor.YELLOW + "Congratulations!", ChatColor.GREEN + "You are the last survivor!", 10, 70, 20);
-
                 Location playerLocation = lastPlayer.getLocation();
                 for (int i = 0; i < 10; i++) {
                     Firework fw = (Firework) lastPlayer.getWorld().spawnEntity(playerLocation.add(new Random().nextInt(15) - 7, new Random().nextInt(5), new Random().nextInt(15) - 7), EntityType.FIREWORK);
@@ -160,13 +272,16 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
                 new BukkitRunnable() {
                     @Override
                     public void run() {
+                        for (Player player : Bukkit.getServer().getOnlinePlayers()) {
+                            player.kickPlayer("Bed-PVP game has over. See you next time!");
+                        }
                         lastPlayer.kickPlayer(ChatColor.YELLOW + "Game over! You won!");
                     }
                 }.runTaskLater(this, 20 * 5); // 延迟5秒（100ticks=5秒）
             }
             Start = false;
             logger.info("Game over!");
-        } else if (onlinePlayersCount >= 3) {
+        } else if (onlinePlayersCount >= 2) {
             // 切换玩家到旁观者模式
             deadPlayer.setGameMode(GameMode.SPECTATOR);
             deadPlayer.sendMessage(ChatColor.RED + "You were killed and switched to Spectator mode.");
@@ -203,13 +318,52 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
 
 
 
+    @EventHandler
+    public void onPlayerMove(PlayerMoveEvent event) {
+        Player player = event.getPlayer();
+        Location from = event.getFrom();
+        Location to = event.getTo();
+
+        // 获取当前世界的边界信息
+        WorldBorder worldBorder = player.getWorld().getWorldBorder();
+        double centerX = worldBorder.getCenter().getX();
+        double centerZ = worldBorder.getCenter().getZ();
+        double diameter = worldBorder.getSize() / 2; // 注意这里的尺寸已经是直径了
+
+        // 计算玩家新的坐标是否在边界外
+        boolean isOutsideX = to.getX() < centerX - diameter || to.getX() > centerX + diameter;
+        boolean isOutsideZ = to.getZ() < centerZ - diameter || to.getZ() > centerZ + diameter;
+
+        if (isOutsideX || isOutsideZ) {
+            // 玩家尝试移出边界，计算并设置新的安全位置
+            double newX = Math.min(Math.max(to.getX(), centerX - diameter), centerX + diameter);
+            double newZ = Math.min(Math.max(to.getZ(), centerZ - diameter), centerZ + diameter);
+
+            // 保持Y轴坐标不变，以防将玩家拉到地下或拉得过高
+            Location safeLocation = new Location(player.getWorld(), newX, to.getY(), newZ);
+            player.teleport(safeLocation);
+
+            //发送消息通知玩家
+            player.sendMessage("You were pulled back to the border.");
+        }
+        if (!Start) {
+            event.setCancelled(true);
+            sendNotStartedTitle(player);
+        }
+    }
+
 
     @EventHandler
     public void onPlayerInteract(PlayerInteractEvent event) {
-        if (!Start) return;//没有开始时则返回
+
         Player player = event.getPlayer();
-        if (event.getAction() == Action.LEFT_CLICK_BLOCK && player.getInventory().getItemInMainHand().getType() == Material.AIR) {
-            if (event.getClickedBlock() != null && isBed(event.getClickedBlock()) && event.getClickedBlock().getWorld().getEnvironment() == World.Environment.NORMAL) {
+        if (!Start) {
+            event.setCancelled(true);
+            sendNotStartedTitle(player);
+            return;
+        }
+        if (event.getAction() == Action.RIGHT_CLICK_BLOCK) {
+            if (event.getClickedBlock() != null &&event.getClickedBlock().getType() == Material.WHITE_BED && event.getClickedBlock().getWorld().getEnvironment() == World.Environment.NORMAL) {
                 event.getClickedBlock().setType(Material.AIR); // 将床方块变为空气
                 player.getWorld().createExplosion(event.getClickedBlock().getLocation(), 4F); // 在床位置创建爆炸
                 event.setCancelled(true); // 取消事件，避免床被放置
@@ -236,6 +390,8 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
                     By JohnRichard4096
                     Commands:
                         bed-pvp:To show command help
+                        bed-pvp-start:To start game
+                        bed-pvp-stop:To stop game
                     
                     """);
 
@@ -244,8 +400,8 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
             logger.info("Game start!");
             if (sender.hasPermission("bedpvp.start") || sender.isOp()) {
                 int onlinePlayersCount = Bukkit.getOnlinePlayers().size();
-                if (onlinePlayersCount < 3) {
-                    sender.sendMessage(ChatColor.RED + "Not enough players online. At least 3 players are required to start Bed-PVP.");
+                if (onlinePlayersCount < 2) {
+                    sender.sendMessage(ChatColor.RED + "Not enough players online. At least 2 players are required to start Bed-PVP.");
                     return true; // 玩家数量不足，直接返回不执行后续逻辑
                 }
 
@@ -275,7 +431,7 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
                             cancel(); // 结束任务
                         } else {
                             // 发送倒计时到操作者并播放音符盒音效
-                            sender.sendMessage(ChatColor.YELLOW + "BedPvp will start after " + countdown + "...");
+                            sender.sendMessage(ChatColor.YELLOW + "BedPvp will start in " + countdown + "...");
                             for (Player player : Bukkit.getOnlinePlayers()) {
                                 player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_HARP, 1, 1); // 音符盒的do音
                             }
@@ -291,14 +447,23 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
 
         if (label.equalsIgnoreCase("bed-pvp-stop")) {
             if (sender.hasPermission("bedpvp.stop") || sender.isOp()) {
+                if (!Start) {
+                    sender.sendMessage("Bed-PVP is not started!");
+                    return true;
+                }
                 logger.info("Game stop!");
                 Start = false;
                 sender.sendMessage("Bed-PVP has been stopped!");
+
+                // Kick all online players
+                for (Player player : Bukkit.getServer().getOnlinePlayers()) {
+                    player.kickPlayer("Bed-PVP game has stopped. See you next time!");
+                }
             } else {
                 sender.sendMessage("You don't have the permission to stop Bed-PVP.");
             }
         }
-        return false;
+        return true;
 
     }
 

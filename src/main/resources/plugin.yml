@@ -6,3 +6,13 @@ commands:
   bed-pvp:
     description: Main command
     usage: /bed-pvp
+  bed-pvp-start:
+    description: Start the game
+    usage: /bed-pvp-start
+    permission: bed-pvp.start
+    default: op
+  bed-pvp-stop:
+    description: Stop the game
+    usage: /bed-pvp-stop
+    permission: bed-pvp.stop
+    default: op
