@@ -16,3 +16,8 @@ commands:
     usage: /bed-pvp-stop
     permission: bed-pvp.stop
     default: op
+  bed-pvp-remade:
+    description: remade world
+    usage:  /bed-pvp-remade
+    permission: bed-pvp.remade
+    default: op

@@ -564,6 +564,24 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
                 sender.sendMessage("You don't have the permission to stop Bed-PVP.");
             }
         }
+        if (label.equalsIgnoreCase("bed-pvp-remade")) {
+            if (sender.hasPermission("bedpvp.remade") || sender.isOp()) {
+                if (Start) {
+                    sender.sendMessage("Bed-PVP is started!");
+                    return true;
+                }
+                logger.info("Remade word......");
+                Start = false;
+
+                // Kick all online players
+                for (Player player : Bukkit.getServer().getOnlinePlayers()) {
+                    player.kickPlayer("Bed-PVP need reload!");
+                }
+                remadeWorld();
+            } else {
+                sender.sendMessage("You don't have the permission to remade map.");
+            }
+        }
         return true;
 
     }
