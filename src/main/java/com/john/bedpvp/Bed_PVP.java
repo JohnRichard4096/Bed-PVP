@@ -1,13 +1,14 @@
 package com.john.bedpvp;
+import it.unimi.dsi.fastutil.longs.LongLongImmutablePair;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.TextColor;
 import org.bukkit.*;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.*;
-import org.bukkit.event.entity.EntityDamageEvent;
-import org.bukkit.event.entity.EntityDeathEvent;
+import org.bukkit.event.entity.*;
 import org.bukkit.event.player.*;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.FireworkMeta;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.block.Block;
@@ -15,12 +16,12 @@ import org.bukkit.block.BlockState;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
-import org.bukkit.event.entity.EntityExplodeEvent;
-import org.bukkit.event.entity.ProjectileHitEvent;
 import org.bukkit.event.server.ServerLoadEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
+import org.bukkit.util.RayTraceResult;
+import org.bukkit.util.Vector;
 import org.codehaus.plexus.util.FileUtils;
 
 import java.io.File;
@@ -90,6 +91,9 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
     @Override
     public void onDisable() {
         // Plugin shutdown logic
+        for (Player player : Bukkit.getServer().getOnlinePlayers()) {
+            player.kickPlayer("Kicking all players......");
+        }
         logger.info("Disabling plugin......");
         logger.info("Done!");
     }
@@ -199,7 +203,34 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
                 10, 70, 20 // 分别代表：显示时间、持续时间、消失时间，单位均为ticks（1秒=20ticks）
         );
     }
+    @EventHandler
+    public void onPlayerRespawn(PlayerRespawnEvent event) {
+        // 获取复活的玩家
+        Player player = event.getPlayer();
 
+        // 获取玩家复活时所在的世界名称
+        String respawnWorldName = event.getRespawnLocation().getWorld().getName();
+
+        // 判断如果玩家复活的世界不是bed_world
+        if (!respawnWorldName.equalsIgnoreCase("bed_world")) {
+            // 获取bed_world世界
+            World bedWorld = Bukkit.getWorld("bed_world");
+
+            // 确保bed_world存在
+            if (bedWorld != null) {
+                // 设置玩家复活点到bed_world的 spawn point 或者你指定的位置
+                event.setRespawnLocation(bedWorld.getSpawnLocation());
+
+                // 可选：发送信息通知玩家
+                player.sendMessage("You are back to battle ground!");
+            } else {
+                // 如果bed_world不存在，可以处理错误情况，比如记录日志或者发送消息给管理员
+                logger.warning("Can't find world!!!");
+            }
+        } else {
+            player.sendMessage("WOO!");
+        }
+    }
 
     private void remadeWorld(){
         for (Player player : Bukkit.getServer().getOnlinePlayers()) {
@@ -217,8 +248,6 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
                 return;
             }
         }
-
-
         // 创建新的bed_world
         WorldCreator bedWorldCreator = new WorldCreator("bed_world").seed(generateRandomInt(-922337203,922337203));
         World bedWorld = Bukkit.createWorld(bedWorldCreator);
@@ -261,6 +290,7 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
             }
         }
     }
+
     @EventHandler
     public void onEntityDamage(EntityDamageEvent event) {
         if (event.getEntity() instanceof Player) {
