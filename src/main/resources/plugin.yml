@@ -2,6 +2,7 @@ name: Bed-PVP
 version: '${version}'
 main: com.john.bedpvp.Bed_PVP
 api-version: '1.20'
+softdepend: ['Multiverse-Core']
 commands:
   bed-pvp:
     description: Main command

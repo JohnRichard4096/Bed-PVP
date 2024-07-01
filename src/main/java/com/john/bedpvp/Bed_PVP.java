@@ -1,5 +1,5 @@
 package com.john.bedpvp;
-import it.unimi.dsi.fastutil.longs.LongLongImmutablePair;
+import com.onarandombox.MultiverseCore.MultiverseCore;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.TextColor;
 import org.bukkit.*;
@@ -7,8 +7,8 @@ import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.*;
 import org.bukkit.event.entity.*;
+import com.onarandombox.MultiverseCore.api.*;
 import org.bukkit.event.player.*;
-import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.FireworkMeta;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.block.Block;
@@ -20,28 +20,28 @@ import org.bukkit.event.server.ServerLoadEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
-import org.bukkit.util.RayTraceResult;
-import org.bukkit.util.Vector;
 import org.codehaus.plexus.util.FileUtils;
-
 import java.io.File;
 import java.io.IOException;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.logging.Logger;
 
 public final class Bed_PVP extends JavaPlugin implements Listener {
     private boolean Start = false;
     private boolean Available = false;
+    private MultiverseCore core = (MultiverseCore) Bukkit.getServer().getPluginManager().getPlugin("Multiverse-Core");
     Logger logger = getLogger();
     @Override
     public void onEnable() {
         // Plugin startup logic
         super.onEnable();
         logger.info("Loading Bed-PVP");
-        System.out.println("""
+        logger.info("""
                   
                 ***********************
                 *Bed-PVP V0.1-Snapshot*
@@ -49,39 +49,40 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
                 ***********************
                  
                 """);
-        /*
-        if (!checkDependency("WorldEdit")) {
-            getLogger().severe("Dependency WorldEdit not found, disabling plugin...");
-            getServer().getPluginManager().disablePlugin(this);
-        }
+        ExecutorService executorService = Executors.newFixedThreadPool(1); // 参数为线程池大小
 
-         */
         logger.info("Registering events......");
         Bukkit.getPluginManager().registerEvents(this, this);
-        // 设置出生点为(0, ~, 0)
 
-        logger.info("Creating world......");
-       remadeWorld();
-        World world = getServer().getWorld("bed_world"); // 替换为您的世界名称
-        if (world != null) {
-            world.setSpawnLocation(0, world.getHighestBlockYAt(0, 0), 0);
-        } else {
-            getLogger().severe("Failed to set spawn point: World not found.");
+        logger.info("Checking dependency");
+        if (getServer().getPluginManager().getPlugin("Multiverse-Core") == null) {
+            logger.severe("Multiverse-Core not found!");
+            getServer().getPluginManager().disablePlugin(this);
             return;
         }
+        MultiverseCore core = (MultiverseCore) Bukkit.getServer().getPluginManager().getPlugin("Multiverse-Core");
+        logger.info("Creating world......");
+        World world = getServer().getWorld("bed_world"); // 替换为您的世界名称
+        MVWorldManager worldManager = core.getMVWorldManager();
 
-        // 限制玩家活动范围
-        int radius = 19; // 19x19区块的半径
-        WorldBorder worldBorder = world.getWorldBorder();
-        worldBorder.setCenter(0, 0); // 设置世界边界的中心点
-        worldBorder.setSize(radius * 512, 0); // 设置世界边界的大小，1区块=16格，所以19区块=19*16=304格，乘以2得到直径
+            while (this.core==null){
+                Logger.getLogger("Bed-PVP").info("Trying to check mv......");
+                core.getMVWorldManager();
+                if (core != null) {
+                    break;
+                }
+            }
+            remadeWorld();
 
-        // 可选：如果玩家超出边界，可以设置不同的处理方式，比如传送回中心点
-        getLogger().info("World border set and player movement restricted to a 19x19 block area around (0, 0).");
-        Available = true;
+
+            // 可选：如果玩家超出边界，可以设置不同的处理方式，比如传送回中心点
+            getLogger().info("World border set and player movement restricted to a 19x19 block area around (0, 0).");
+
+            logger.info("Done!");
 
 
-        logger.info("Done!");
+
+
         getServer().getScheduler().runTaskTimer(this, new SpawnSheepTask(), 0L, 20 * 60 * 3);
         // 进行其他启用插件的逻辑
     }
@@ -91,22 +92,17 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
     @Override
     public void onDisable() {
         // Plugin shutdown logic
+        Available = false;
         for (Player player : Bukkit.getServer().getOnlinePlayers()) {
-            player.kickPlayer("Kicking all players......");
+            player.kickPlayer("Server shutdown.");
         }
         logger.info("Disabling plugin......");
         logger.info("Done!");
     }
-    /*
-    private boolean checkDependency(String dependencyName) {
-        Plugin plugin = getServer().getPluginManager().getPlugin(dependencyName);
-        if (plugin == null) {
-            return false;
-        }
-        return true;
-    }
 
-     */
+
+
+
 
     public class SpawnSheepTask implements Runnable {
 
@@ -231,42 +227,84 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
             player.sendMessage("WOO!");
         }
     }
-
     private void remadeWorld(){
+
+        if(core==null){
+            getLogger().severe("Multiverse-Core plugin not found or not initialized properly. Please make sure it's installed and enabled.");
+            return;
+        }
+        MVWorldManager worldManager = core.getMVWorldManager();
+        World world = Bukkit.getServer().getWorld("bed_world");
         for (Player player : Bukkit.getServer().getOnlinePlayers()) {
             player.kickPlayer("Bed pvp will re-create world!");
         }
         Available = false;
+
+        if (world != null) {
+
+            worldManager.unloadWorld("bed_world");
+            //卸载世界
+            // 打印确认信息
+            logger.info("world unloaded!.");
+        } else {
+            logger.warning("The specified world does not exist.");
+        }
+
         File bedWorldFolder = new File(Bukkit.getWorldContainer(), "bed_world");
 
-        if (bedWorldFolder.exists()) {
-            try {
-                FileUtils.deleteDirectory(bedWorldFolder);
-            } catch (IOException e) {
-                getLogger().severe("Error while removing old world because：" + e.getMessage());
-                Bukkit.shutdown();
-                return;
-            }
-        }
+        worldManager.deleteWorld("bed_world");
         // 创建新的bed_world
-        WorldCreator bedWorldCreator = new WorldCreator("bed_world").seed(generateRandomInt(-922337203,922337203));
-        World bedWorld = Bukkit.createWorld(bedWorldCreator);
-
+        logger.info("Spawning new world......");
+        worldManager.addWorld(
+                "bed_world", // The worldname
+                World.Environment.NORMAL, // The overworld environment type.
+                generateRandomInt(-922337203,922337203), // The world seed. Any seed is fine for me, so we just pass null.
+                WorldType.NORMAL, // Nothing special. If you want something like a flat world, change this.
+                true, // This means we want to structures like villages to generator, Change to false if you don't want this.
+                null // Specifies a custom generator. We are not using any so we just pass null.
+        );
+        worldManager.loadWorld("bed_world");
+        // 获取名为"bed_world"的世界，这里假设世界已经存在且加载
+        World bedWorld = core.getMVWorldManager().getMVWorld("bed_world").getCBWorld();
+        // 使用原生Bukkit/Spigot API进行设置
         Location spawnLocation = new Location(bedWorld, 0.0, bedWorld.getHighestBlockYAt(0, 0) + 1, 0.0);
         bedWorld.setSpawnLocation(spawnLocation);
-        bedWorld.setGameRule(GameRule.DO_MOB_SPAWNING, true); // 允许生物生成
-        bedWorld.setStorm(false); // 设置无雨
-        bedWorld.setThundering(false);// 设置无雷暴
+
+        // 允许生物生成，使用原生API
+        bedWorld.setGameRule(GameRule.DO_MOB_SPAWNING, true);
+
+        // 设置无雨
+        bedWorld.setStorm(false);
+
+        // 设置无雷暴
+        bedWorld.setThundering(false);
+
+        // 设置难度为困难
         bedWorld.setDifficulty(Difficulty.HARD);
-        bedWorld.setTime(6000L); // 设定时间为白天
+
+        // 设定时间为白天 (6000L 对应于中午)
+        bedWorld.setTime(6000L);
+        if (world != null) {
+            world.setSpawnLocation(0, world.getHighestBlockYAt(0, 0), 0);
+        } else {
+            getLogger().severe("Failed to set spawn point: World not found.");
+            return;
+        }
+
+        // 限制玩家活动范围
+        int radius = 19; // 19x19区块的半径
+        WorldBorder worldBorder = world.getWorldBorder();
+        worldBorder.setCenter(0, 0); // 设置世界边界的中心点
+        worldBorder.setSize(radius * 512, 0); // 设置世界边界的大小，1区块=16格，所以19区块=19*16=304格，乘以2得到直径
         Available = true;
+        logger.info("Done!");
     }
     private static final SecureRandom RANDOM = new SecureRandom();
 
-    public static long generateRandomInt(long min, long max) {
+    public static String generateRandomInt(long min, long max) {
         // nextInt()方法的参数是取值范围，因此max - min + 1是实际的取值范围大小
         // 加上min是为了将随机数映射到min到max的范围内
-        return RANDOM.nextLong(max - min + 1) + min;
+        return String.valueOf(RANDOM.nextLong(max - min + 1) + min);
     }
     @EventHandler
     public void onProjectileHit(ProjectileHitEvent event) {
