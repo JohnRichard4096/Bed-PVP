@@ -10,3 +10,5 @@
     bed-pvp-stop:终止游戏
     bed-pvp:命令提示
     bed-pvp-remade:重构世界并踢出全部玩家。
+
+## 注意：插件需要依赖MV多世界！！！
