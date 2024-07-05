@@ -20,9 +20,7 @@ import org.bukkit.event.server.ServerLoadEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
-import org.codehaus.plexus.util.FileUtils;
 import java.io.File;
-import java.io.IOException;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.List;
@@ -34,6 +32,7 @@ import java.util.logging.Logger;
 public final class Bed_PVP extends JavaPlugin implements Listener {
     private boolean Start = false;
     private boolean Available = false;
+    private ExecutorService executorService = Executors.newFixedThreadPool(1); // 参数为线程池大小
     private MultiverseCore core = (MultiverseCore) Bukkit.getServer().getPluginManager().getPlugin("Multiverse-Core");
     Logger logger = getLogger();
     @Override
@@ -49,7 +48,7 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
                 ***********************
                  
                 """);
-        ExecutorService executorService = Executors.newFixedThreadPool(1); // 参数为线程池大小
+
 
         logger.info("Registering events......");
         Bukkit.getPluginManager().registerEvents(this, this);
@@ -82,9 +81,40 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
 
 
 
+        /*
+        ExecutorService executorService = Executors.newFixedThreadPool(10);
 
-        getServer().getScheduler().runTaskTimer(this, new SpawnSheepTask(), 0L, 20 * 60 * 3);
-        // 进行其他启用插件的逻辑
+// 提交一个Callable任务
+Future<Integer> future = executorService.submit(new Callable<Integer>() {
+    @Override
+    public Integer call() throws Exception {
+        Thread.sleep(1000); // 模拟耗时操作
+        return 42; // 返回计算结果
+    }
+});
+
+try {
+    // 获取任务结果，这会阻塞直到结果可用
+    Integer result = future.get();
+    System.out.println("任务结果: " + result);
+} catch (InterruptedException | ExecutionException e) {
+    e.printStackTrace();
+}
+
+// 记得关闭ExecutorService
+//executorService.shutdown();
+
+        * */
+
+        executorService.submit(() -> {
+            new SpawnSheepTask();
+            try {
+                Thread.sleep(180000);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+        });
+        executorService.shutdown();
     }
 
 
@@ -290,7 +320,7 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
         int radius = 19; // 19x19区块的半径
         WorldBorder worldBorder = world.getWorldBorder();
         worldBorder.setCenter(0, 0); // 设置世界边界的中心点
-        worldBorder.setSize(radius * 512, 0); // 设置世界边界的大小，1区块=16格，所以19区块=19*16=304格，乘以2得到直径
+        worldBorder.setSize(radius * 2, 0L); // 设置世界边界的大小，乘以2得到直径
         Available = true;
         logger.info("Done!");
     }
@@ -323,13 +353,24 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
             }
         }
     }
-
+    @EventHandler
+    public void onEntityDamageByEntity(EntityDamageByEntityEvent event) {
+        if (event.getEntity() instanceof Player && event.getDamager() instanceof Player) {
+            // 确保受伤实体和伤害来源都是玩家
+            event.setCancelled(true);
+        }
+    }
     @EventHandler
     public void onEntityDamage(EntityDamageEvent event) {
         if (event.getEntity() instanceof Player) {
-            if (event.getCause() == EntityDamageEvent.DamageCause.FALL) {
-                    // 取消摔落伤害
-                    event.setCancelled(true);
+            switch (event.getCause()){
+                case FALL -> event.setCancelled(true);
+                case FIRE -> event.setCancelled(true);
+                case LAVA -> event.setCancelled(true);
+                case FIRE_TICK -> event.setCancelled(true);
+                default -> {
+                    return;
+                }
             }
             if(!Start){
                 event.setCancelled(true);
