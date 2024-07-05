@@ -468,8 +468,9 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
 
         // 当在线非旁观者玩家等于2时，死亡的玩家被踢出并发送消息
         if (onlinePlayersCount == 2) {
-
-            deadPlayer.kickPlayer(ChatColor.RED + "You lost the game.");
+            deadPlayer.setGameMode(GameMode.SPECTATOR);
+            deadPlayer.sendTitle(ChatColor.RED + "You lost the last battle!", ChatColor.GRAY + "Oops!", 10, 70, 20);
+            deadPlayer.playSound(deadPlayer.getLocation(), Sound.ENTITY_ENDER_DRAGON_GROWL , 1.0f, 1.0f);
             onlinePlayersCount=1;
             if (onlinePlayersCount == 1){
                 Player lastPlayer = deadPlayer.getServer().getOnlinePlayers().stream()
@@ -478,6 +479,7 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
                         .orElse(null);
                 if (lastPlayer != null) {
                     // 发送获胜消息并生成烟花庆祝
+                    lastPlayer.playSound(lastPlayer.getLocation(), Sound.ENTITY_ENDER_DRAGON_DEATH, 1.0f, 1.0f);
                     lastPlayer.sendTitle(ChatColor.YELLOW + "Congratulations!", ChatColor.GREEN + "You are the last survivor!", 10, 70, 20);
                     Location playerLocation = lastPlayer.getLocation();
                     for (int i = 0; i < 10; i++) {
