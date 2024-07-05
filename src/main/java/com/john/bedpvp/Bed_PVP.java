@@ -5,12 +5,18 @@ import net.kyori.adventure.text.format.TextColor;
 import org.bukkit.*;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
+import org.bukkit.enchantments.Enchantment;
+import org.bukkit.event.inventory.PrepareItemCraftEvent;
 import org.bukkit.entity.*;
 import org.bukkit.event.entity.*;
 import com.onarandombox.MultiverseCore.api.*;
 import org.bukkit.event.player.*;
+import org.bukkit.inventory.CraftingInventory;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.CompassMeta;
 import org.bukkit.inventory.meta.FireworkMeta;
+import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockState;
@@ -21,10 +27,11 @@ import org.bukkit.event.server.ServerLoadEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
+import org.jetbrains.annotations.NotNull;
+
 import java.io.File;
 import java.security.SecureRandom;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.ExecutorService;
@@ -159,26 +166,6 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
     }
 
 
-    private Player findNearestPlayer(Player excludePlayer) {
-        // 实现逻辑以找到除excludePlayer外的最近玩家，此处简化处理
-        // 示例逻辑可能不准确，实际应用中需要考虑更多因素如世界、距离等
-        return Bukkit.getOnlinePlayers()
-                .stream()
-                .filter(p -> !p.equals(excludePlayer))
-                .min(Comparator.comparingDouble(p -> p.getLocation().distance(excludePlayer.getLocation())))
-                .orElse(null);
-    }
-
-    // 注意：此方法需要使用NMS代码来实现，以下为示意伪代码
-    private void setCompassTarget(Player player, Player target) {
-        // 实际上，您需要使用NMS（例如：CraftPlayer.getHandle()）来访问和修改NMS层的实体和物品数据
-        // 以下代码仅为示意，实际实现会涉及复杂的NMS调用
-        // Example:
-        // EntityPlayer entityPlayer = ((CraftPlayer) player).getHandle();
-        // entityPlayer.getHeldItemMainhand().set...
-        // entityPlayer.set...
-        // 并调用适当的方法来设置指南针的目标
-    }
     @EventHandler
     public void onPlayerTryEnterAnyPortal(PlayerPortalEvent event) {
         // 取消任何传送门事件，阻止玩家通过传送门进入任何维度
@@ -212,7 +199,7 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
         // Clear inventory and add glowing effect as before
         player.getInventory().clear();
         player.addPotionEffect(new PotionEffect(PotionEffectType.GLOWING, Integer.MAX_VALUE, 1, false, false));
-
+        giveTrackingCompass(player);
         // Teleport the player to coordinates (0, ~, 0) at the highest solid block
         Location spawnLocation = new Location(player.getWorld(), 0.0, player.getWorld().getHighestBlockYAt(0, 0), 0.0);
         player.teleport(spawnLocation);
@@ -225,6 +212,19 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
         player.setFireTicks(0);
 
 
+    }
+    private void giveTrackingCompass(Player player) {
+        ItemStack compass = new ItemStack(Material.COMPASS);
+        CompassMeta compassMeta = (CompassMeta) compass.getItemMeta();
+        compassMeta.setDisplayName("追踪指南针");
+        compass.setItemMeta(compassMeta);
+
+        // 假设使用PersistentDataAPI来标记这是一个追踪指南针
+        ItemMeta meta = compass.getItemMeta();
+        meta.getPersistentDataContainer().set(new NamespacedKey(this, "trackingCompass"), PersistentDataType.BYTE, (byte) 1);
+        compass.setItemMeta(meta);
+
+        player.getInventory().addItem(compass);
     }
     private void sendNotStartedTitle(Player player) {
         player.sendTitle(
@@ -375,10 +375,7 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
     public void onEntityDamage(EntityDamageEvent event) {
         if (event.getEntity() instanceof Player) {
             switch (event.getCause()){
-                case FALL -> event.setCancelled(true);
-                case FIRE -> event.setCancelled(true);
-                case FIRE_TICK -> event.setCancelled(true);
-                case LAVA -> event.setCancelled(true);
+                case FALL, FIRE, LAVA, FIRE_TICK -> event.setCancelled(true);
                 default -> {
                     return;
                 }
@@ -469,6 +466,7 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
         // 当在线非旁观者玩家等于2时，死亡的玩家被踢出并发送消息
         if (onlinePlayersCount == 2) {
             deadPlayer.setGameMode(GameMode.SPECTATOR);
+            deadPlayer.getInventory().clear();
             deadPlayer.sendTitle(ChatColor.RED + "You lost the last battle!", ChatColor.GRAY + "Oops!", 10, 70, 20);
             deadPlayer.playSound(deadPlayer.getLocation(), Sound.ENTITY_ENDER_DRAGON_GROWL , 1.0f, 1.0f);
             onlinePlayersCount=1;
@@ -484,24 +482,21 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
                     Location playerLocation = lastPlayer.getLocation();
                     for (int i = 0; i < 10; i++) {
                         final int delay = i * 20; // 20 ticks equal to 1 second in Minecraft
-                        final int taskId = Bukkit.getScheduler().scheduleSyncDelayedTask(getPlugin(this.getClass()), new Runnable() {
-                            @Override
-                            public void run() {
-                                Firework fw = (Firework) lastPlayer.getWorld().spawnEntity(
-                                        playerLocation.add(new Random().nextInt(15) - 7,
-                                                new Random().nextInt(5),
-                                                new Random().nextInt(15) - 7),
-                                        EntityType.FIREWORK);
-                                FireworkMeta fwm = fw.getFireworkMeta();
-                                fwm.addEffect(FireworkEffect.builder()
-                                        .with(FireworkEffect.Type.BURST)
-                                        .withColor(Color.YELLOW)
-                                        .flicker(true)
-                                        .trail(true)
-                                        .build());
-                                fwm.setPower(2);
-                                fw.setFireworkMeta(fwm);
-                            }
+                        final int taskId = Bukkit.getScheduler().scheduleSyncDelayedTask(getPlugin(this.getClass()), () -> {
+                            Firework fw = (Firework) lastPlayer.getWorld().spawnEntity(
+                                    playerLocation.add(new Random().nextInt(15) - 7,
+                                            new Random().nextInt(5),
+                                            new Random().nextInt(15) - 7),
+                                    EntityType.FIREWORK);
+                            FireworkMeta fwm = fw.getFireworkMeta();
+                            fwm.addEffect(FireworkEffect.builder()
+                                    .with(FireworkEffect.Type.BURST)
+                                    .withColor(Color.YELLOW)
+                                    .flicker(true)
+                                    .trail(true)
+                                    .build());
+                            fwm.setPower(2);
+                            fw.setFireworkMeta(fwm);
                         }, delay);
                     }
                     // 5秒后踢出最后的玩家并结束游戏
@@ -526,11 +521,46 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
         else if (onlinePlayersCount > 2) {
             // 切换玩家到旁观者模式
             deadPlayer.setGameMode(GameMode.SPECTATOR);
+            deadPlayer.getInventory().clear();
             deadPlayer.sendMessage(ChatColor.RED + "You were killed and switched to Spectator mode.");
         }
 
     }
+    @EventHandler
+    public void onCraftItem(PrepareItemCraftEvent event) {
+        CraftingInventory inventory = event.getInventory();
+        ItemStack result = inventory.getResult();
 
+        // 确保有结果物品且是盔甲类型
+        if (result != null && result.getType().toString().endsWith("_HELMET") ||
+                result.getType().toString().endsWith("_CHESTPLATE") ||
+                result.getType().toString().endsWith("_LEGGINGS") ||
+                result.getType().toString().endsWith("_BOOTS")) {
+
+            ItemMeta meta = result.getItemMeta();
+            if (meta != null) {
+                // 根据盔甲类型添加不同附魔
+                switch (result.getType()) {
+                    case IRON_HELMET:
+                    case IRON_BOOTS:
+                        // 铁帽子和铁靴子添加保护I
+                        meta.addEnchant(Enchantment.PROTECTION_PROJECTILE, 1, true);
+                        break;
+                    case IRON_LEGGINGS:
+                        // 铁裤子添加保护II
+                        meta.addEnchant(Enchantment.PROTECTION_ENVIRONMENTAL, 2, true);
+                        break;
+                    case IRON_CHESTPLATE:
+                        // 铁胸甲添加爆炸保护I
+                        meta.addEnchant(Enchantment.PROTECTION_EXPLOSIONS, 1, true);
+                        break;
+                    default:
+                        break;
+                }
+                result.setItemMeta(meta);
+            }
+        }
+    }
 
     @EventHandler
     public void onEntityExplode(EntityExplodeEvent event) {
@@ -564,7 +594,6 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
     @EventHandler
     public void onPlayerMove(PlayerMoveEvent event) {
         Player player = event.getPlayer();
-        Location from = event.getFrom();
         Location to = event.getTo();
 
         // 获取当前世界的边界信息
@@ -605,6 +634,45 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
             sendNotStartedTitle(player);
             return;
         }
+        Player nearestPlayer = null;
+        ItemStack item = event.getItem();
+        if (item != null && item.getType() == Material.COMPASS) {
+            ItemMeta meta = item.getItemMeta();
+            if (event.getAction().isLeftClick() && Start) {
+                // 左键点击，切换到最近的追踪目标
+                double nearestDistance = Double.MAX_VALUE;
+
+                for (Player p : Bukkit.getOnlinePlayers()) {
+                    if (p != player && p.getPlayer().getGameMode()!=GameMode.SPECTATOR) { // 确保目标不是自己且不是旁观者
+                        double distance = p.getLocation().distance(player.getLocation());
+                        if (distance < nearestDistance) {
+                            nearestDistance = distance;
+                            nearestPlayer = p;
+                        }
+                    }
+                }
+                if (nearestPlayer != null) {
+                    // 如果找到了比当前追踪目标更近的玩家，则更新追踪目标
+
+
+                    player.setBedSpawnLocation(nearestPlayer.getLocation(), true); // 更新出生点到新追踪目标的位置
+                    player.sendMessage("Now tracked " + nearestPlayer.getName());
+
+                } else {
+                    player.sendMessage("Player not found");
+                }
+            }
+            if (meta != null && meta.getPersistentDataContainer().has(new NamespacedKey(this, "trackingCompass"), PersistentDataType.BYTE)) {
+                if (event.getAction().isRightClick() && Start) {
+                    // 右键点击，发送视觉效果作为刷新提示
+                    if(nearestPlayer == null) {
+                        player.sendMessage( ChatColor.RED+"No player found!");
+                    }else{
+                        player.setBedSpawnLocation(nearestPlayer.getLocation(), true);
+                    }
+                }
+            }
+        }
         if (event.getAction() == Action.RIGHT_CLICK_BLOCK) {
             if (event.getClickedBlock() != null &&event.getClickedBlock().getType() == Material.WHITE_BED && event.getClickedBlock().getWorld().getEnvironment() == World.Environment.NORMAL) {
                 event.getClickedBlock().setType(Material.AIR); // 将床方块变为空气
@@ -625,7 +693,7 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
         }
     }
     @Override
-    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+    public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, String label, String[] args) {
         if (label.equalsIgnoreCase("bed-pvp")) {
             sender.sendMessage("""
                     
