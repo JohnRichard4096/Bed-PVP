@@ -9,6 +9,7 @@ import org.bukkit.entity.*;
 import org.bukkit.event.entity.*;
 import com.onarandombox.MultiverseCore.api.*;
 import org.bukkit.event.player.*;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.FireworkMeta;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.block.Block;
@@ -23,6 +24,7 @@ import org.bukkit.potion.PotionEffectType;
 import java.io.File;
 import java.security.SecureRandom;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.ExecutorService;
@@ -81,31 +83,6 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
 
 
 
-        /*
-        ExecutorService executorService = Executors.newFixedThreadPool(10);
-
-// 提交一个Callable任务
-Future<Integer> future = executorService.submit(new Callable<Integer>() {
-    @Override
-    public Integer call() throws Exception {
-        Thread.sleep(1000); // 模拟耗时操作
-        return 42; // 返回计算结果
-    }
-});
-
-try {
-    // 获取任务结果，这会阻塞直到结果可用
-    Integer result = future.get();
-    System.out.println("任务结果: " + result);
-} catch (InterruptedException | ExecutionException e) {
-    e.printStackTrace();
-}
-
-// 记得关闭ExecutorService
-//executorService.shutdown();
-
-        * */
-
         executorService.submit(() -> {
             new SpawnSheepTask();
             try {
@@ -152,7 +129,7 @@ try {
                         mainWorld.spawnEntity(randomLocation, EntityType.HORSE);
                     }
                 }
-                broadcastMessage("Some animals were born in the main world.");
+                broadcastMessage("some animals were spawned in the overworld");
             } else {
                 getLogger().warning("Main world not found!");
             }
@@ -180,6 +157,28 @@ try {
             Bukkit.broadcast(Component.text(message).color(TextColor.fromCSSHexString("#00FF00"))); // 绿色文字
         }
     }
+
+
+    private Player findNearestPlayer(Player excludePlayer) {
+        // 实现逻辑以找到除excludePlayer外的最近玩家，此处简化处理
+        // 示例逻辑可能不准确，实际应用中需要考虑更多因素如世界、距离等
+        return Bukkit.getOnlinePlayers()
+                .stream()
+                .filter(p -> !p.equals(excludePlayer))
+                .min(Comparator.comparingDouble(p -> p.getLocation().distance(excludePlayer.getLocation())))
+                .orElse(null);
+    }
+
+    // 注意：此方法需要使用NMS代码来实现，以下为示意伪代码
+    private void setCompassTarget(Player player, Player target) {
+        // 实际上，您需要使用NMS（例如：CraftPlayer.getHandle()）来访问和修改NMS层的实体和物品数据
+        // 以下代码仅为示意，实际实现会涉及复杂的NMS调用
+        // Example:
+        // EntityPlayer entityPlayer = ((CraftPlayer) player).getHandle();
+        // entityPlayer.getHeldItemMainhand().set...
+        // entityPlayer.set...
+        // 并调用适当的方法来设置指南针的目标
+    }
     @EventHandler
     public void onPlayerTryEnterAnyPortal(PlayerPortalEvent event) {
         // 取消任何传送门事件，阻止玩家通过传送门进入任何维度
@@ -193,7 +192,7 @@ try {
         if (Start) {
             // Set the player to spectator mode
             player.setGameMode(GameMode.SPECTATOR);
-
+            player.getInventory().clear();
             // Send a red-colored message to the player indicating the game has started
             player.sendMessage(ChatColor.RED + "The game has already started! You are in Spectator mode.");
         }
@@ -220,6 +219,11 @@ try {
         player.setExp(0);
         player.setLevel(0);
         player.setTotalExperience(0);
+        player.setHealth(20);
+        player.setFoodLevel(20);
+        player.setArrowsInBody(0);
+        player.setFireTicks(0);
+
 
     }
     private void sendNotStartedTitle(Player player) {
@@ -236,7 +240,8 @@ try {
 
         // 获取玩家复活时所在的世界名称
         String respawnWorldName = event.getRespawnLocation().getWorld().getName();
-
+        PotionEffect lightEffect = new PotionEffect(PotionEffectType.GLOWING, Integer.MAX_VALUE, 0, true, false);
+        player.addPotionEffect(lightEffect);
         // 判断如果玩家复活的世界不是bed_world
         if (!respawnWorldName.equalsIgnoreCase("bed_world")) {
             // 获取bed_world世界
@@ -244,10 +249,9 @@ try {
 
             // 确保bed_world存在
             if (bedWorld != null) {
-                // 设置玩家复活点到bed_world的 spawn point 或者你指定的位置
+                // 设置玩家复活点到bed_world的 spawn point 并且传送玩家到 spawn point
                 event.setRespawnLocation(bedWorld.getSpawnLocation());
-
-                // 可选：发送信息通知玩家
+                event.getPlayer().teleport(bedWorld.getSpawnLocation());
                 player.sendMessage("You are back to battle ground!");
             } else {
                 // 如果bed_world不存在，可以处理错误情况，比如记录日志或者发送消息给管理员
@@ -294,7 +298,7 @@ try {
                 null // Specifies a custom generator. We are not using any so we just pass null.
         );
         worldManager.loadWorld("bed_world");
-        // 获取名为"bed_world"的世界，这里假设世界已经存在且加载
+        // 获取名为"bed_world"的世界
         World bedWorld = core.getMVWorldManager().getMVWorld("bed_world").getCBWorld();
         // 使用原生Bukkit/Spigot API进行设置
         Location spawnLocation = new Location(bedWorld, 0.0, bedWorld.getHighestBlockYAt(0, 0) + 1, 0.0);
@@ -308,6 +312,13 @@ try {
 
         // 设置无雷暴
         bedWorld.setThundering(false);
+        try{
+            bedWorld.setGameRuleValue("keepInventory", "true");
+        }catch (Exception e){
+            e.printStackTrace();
+        }
+        bedWorld.setAutoSave(true);
+        bedWorld.setPVP(false);
 
         // 设置难度为困难
         bedWorld.setDifficulty(Difficulty.HARD);
@@ -366,8 +377,8 @@ try {
             switch (event.getCause()){
                 case FALL -> event.setCancelled(true);
                 case FIRE -> event.setCancelled(true);
-                case LAVA -> event.setCancelled(true);
                 case FIRE_TICK -> event.setCancelled(true);
+                case LAVA -> event.setCancelled(true);
                 default -> {
                     return;
                 }
@@ -378,6 +389,37 @@ try {
 
         }
     }
+
+
+    public class PlayerLeaveListener implements Listener {
+
+        @EventHandler
+        public void onPlayerQuit(PlayerQuitEvent event) {
+            // 获取离开的玩家的游戏模式
+            GameMode gameMode = event.getPlayer().getGameMode();
+
+
+            // 检查玩家是否为非旁观模式
+            if (gameMode != GameMode.SPECTATOR) {
+                boolean hasNonSpectator = false;
+                for (Player onlinePlayer : event.getPlayer().getServer().getOnlinePlayers()) {
+                    if (onlinePlayer.getGameMode() != GameMode.SPECTATOR) {
+                        hasNonSpectator = true;
+                        for (Player player : Bukkit.getOnlinePlayers()) {
+                            // 使用player.kickPlayer(reason)方法踢出玩家，reason是踢出的原因
+                            player.kickPlayer("No live player in server!");
+                        }
+                        break;
+                    }
+                }
+                Start = hasNonSpectator;
+                if(!Start){
+                    remadeWorld();
+                }
+            }
+        }
+    }
+
     @EventHandler
     public void onPlayerDeath(EntityDeathEvent event) {
         // 确认死亡实体是玩家
@@ -387,13 +429,35 @@ try {
         if (!(event.getEntity() instanceof Player)) return;
         Player deadPlayer = (Player) event.getEntity();
         EntityDamageEvent damageEvent = deadPlayer.getLastDamageCause();
+
         if (damageEvent != null) {
-            if (damageEvent.getCause() != EntityDamageEvent.DamageCause.ENTITY_EXPLOSION && damageEvent.getCause() != EntityDamageEvent.DamageCause.BLOCK_EXPLOSION) {
-                event.getDrops().clear();
+            if (damageEvent.getCause() == EntityDamageEvent.DamageCause.ENTITY_EXPLOSION && damageEvent.getCause() == EntityDamageEvent.DamageCause.BLOCK_EXPLOSION) {
+
+                    // 清除默认的掉落物（如果有的话，因为可能受游戏规则影响）
+                    event.getDrops().clear();
+
+                    // 获取玩家的物品栏内容
+                    ItemStack[] inventoryContents = deadPlayer.getInventory().getContents();
+                    ItemStack[] armorContents = deadPlayer.getInventory().getArmorContents();
+
+                    // 将物品栏和盔甲栏的物品添加到掉落物列表
+                    for (ItemStack item : inventoryContents) {
+                        if (item != null) {
+                            event.getDrops().add(item);
+                        }
+                    }
+                    for (ItemStack armor : armorContents) {
+                        if (armor != null) {
+                            event.getDrops().add(armor);
+                        }
+                    }
+
+                    // 注意：这样做会实际移除玩家物品栏中的物品，如果你只想模拟掉落而不真正拿走物品，
+                    // 需要考虑复制物品而不是直接移动。
+
                 return;
 
             }
-
             // 如果不是被炸死，直接结束此方法
         }
          int onlinePlayersCount = 0;
