@@ -429,7 +429,7 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
         if (!(event.getEntity() instanceof Player)) return;
         Player deadPlayer = (Player) event.getEntity();
         EntityDamageEvent damageEvent = deadPlayer.getLastDamageCause();
-
+        if (damageEvent.getCause() != EntityDamageEvent.DamageCause.ENTITY_EXPLOSION && damageEvent.getCause() != EntityDamageEvent.DamageCause.BLOCK_EXPLOSION) return;
         if (damageEvent != null) {
             if (damageEvent.getCause() == EntityDamageEvent.DamageCause.ENTITY_EXPLOSION && damageEvent.getCause() == EntityDamageEvent.DamageCause.BLOCK_EXPLOSION) {
 
@@ -456,7 +456,7 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
                     // 需要考虑复制物品而不是直接移动。
 
 
-            }else return;
+            }
             // 如果不是被炸死，直接结束此方法
         }
          int onlinePlayersCount = 0;
