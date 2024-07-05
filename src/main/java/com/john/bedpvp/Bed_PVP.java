@@ -455,9 +455,8 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
                     // 注意：这样做会实际移除玩家物品栏中的物品，如果你只想模拟掉落而不真正拿走物品，
                     // 需要考虑复制物品而不是直接移动。
 
-                return;
 
-            }
+            }else return;
             // 如果不是被炸死，直接结束此方法
         }
          int onlinePlayersCount = 0;
@@ -469,6 +468,7 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
 
         // 当在线非旁观者玩家等于2时，死亡的玩家被踢出并发送消息
         if (onlinePlayersCount == 2) {
+
             deadPlayer.kickPlayer(ChatColor.RED + "You lost the game.");
             onlinePlayersCount=1;
             if (onlinePlayersCount == 1){
