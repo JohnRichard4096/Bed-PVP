@@ -1,5 +1,5 @@
 name: Bed-PVP
-version: '${version}'
+version: '0.2-Snapshot'
 main: com.john.bedpvp.Bed_PVP
 api-version: '1.20'
 softdepend: ['Multiverse-Core']

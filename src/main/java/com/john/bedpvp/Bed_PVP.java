@@ -52,7 +52,7 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
         logger.info("""
                   
                 ***********************
-                *Bed-PVP V0.1-Snapshot*
+                *Bed-PVP V0.2-Snapshot*
                 *Loading......        *
                 ***********************
                  
@@ -696,7 +696,7 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
         if (label.equalsIgnoreCase("bed-pvp")) {
             sender.sendMessage("""
                     
-                    bed-pvp V0.1-Snapshot
+                    bed-pvp V0.2-Snapshot
                     By JohnRichard4096
                     Commands:
                         bed-pvp:To show command help
