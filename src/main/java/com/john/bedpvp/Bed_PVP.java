@@ -376,18 +376,27 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
                     lastPlayer.sendTitle(ChatColor.YELLOW + "Congratulations!", ChatColor.GREEN + "You are the last survivor!", 10, 70, 20);
                     Location playerLocation = lastPlayer.getLocation();
                     for (int i = 0; i < 10; i++) {
-                        Firework fw = (Firework) lastPlayer.getWorld().spawnEntity(playerLocation.add(new Random().nextInt(15) - 7, new Random().nextInt(5), new Random().nextInt(15) - 7), EntityType.FIREWORK);
-                        FireworkMeta fwm = fw.getFireworkMeta();
-                        fwm.addEffect(FireworkEffect.builder().with(FireworkEffect.Type.BURST).withColor(Color.YELLOW).flicker(true).trail(true).build());
-                        fwm.setPower(2);
-                        fw.setFireworkMeta(fwm);
-                        try {
-                            Thread.sleep(100);
-                        } catch (InterruptedException e) {
-                            throw new RuntimeException(e);
-                        }
+                        final int delay = i * 20; // 20 ticks equal to 1 second in Minecraft
+                        final int taskId = Bukkit.getScheduler().scheduleSyncDelayedTask(getPlugin(this.getClass()), new Runnable() {
+                            @Override
+                            public void run() {
+                                Firework fw = (Firework) lastPlayer.getWorld().spawnEntity(
+                                        playerLocation.add(new Random().nextInt(15) - 7,
+                                                new Random().nextInt(5),
+                                                new Random().nextInt(15) - 7),
+                                        EntityType.FIREWORK);
+                                FireworkMeta fwm = fw.getFireworkMeta();
+                                fwm.addEffect(FireworkEffect.builder()
+                                        .with(FireworkEffect.Type.BURST)
+                                        .withColor(Color.YELLOW)
+                                        .flicker(true)
+                                        .trail(true)
+                                        .build());
+                                fwm.setPower(2);
+                                fw.setFireworkMeta(fwm);
+                            }
+                        }, delay);
                     }
-
                     // 5秒后踢出最后的玩家并结束游戏
                     new BukkitRunnable() {
                         @Override
