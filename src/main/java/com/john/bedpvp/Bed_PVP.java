@@ -216,7 +216,7 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
     private void giveTrackingCompass(Player player) {
         ItemStack compass = new ItemStack(Material.COMPASS);
         CompassMeta compassMeta = (CompassMeta) compass.getItemMeta();
-        compassMeta.setDisplayName("追踪指南针");
+        compassMeta.setDisplayName("TrackingCompass");
         compass.setItemMeta(compassMeta);
 
         // 假设使用PersistentDataAPI来标记这是一个追踪指南针
@@ -664,7 +664,6 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
             }
             if (meta != null && meta.getPersistentDataContainer().has(new NamespacedKey(this, "trackingCompass"), PersistentDataType.BYTE)) {
                 if (event.getAction().isRightClick() && Start) {
-                    // 右键点击，发送视觉效果作为刷新提示
                     if(nearestPlayer == null) {
                         player.sendMessage( ChatColor.RED+"No player found!");
                     }else{
