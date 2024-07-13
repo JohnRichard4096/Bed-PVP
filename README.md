@@ -1,4 +1,7 @@
 # Bed-PVP!
+
+![Bed-PVP](https://github.com/user-attachments/assets/ae01b226-7bba-4be3-b1ee-04ddf500624f)
+
 <br/>
 使用在主世界能爆炸的床的pvp!
 
