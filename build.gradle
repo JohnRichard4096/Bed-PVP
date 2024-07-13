@@ -4,7 +4,7 @@ plugins {
 }
 
 group = 'com.john.bedpvp'
-version = '0.2-Snapshot'
+version = '0.3-Snapshot'
 
 repositories {
     mavenCentral()

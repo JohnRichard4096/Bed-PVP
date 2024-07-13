@@ -11,6 +11,7 @@ import org.bukkit.entity.*;
 import org.bukkit.event.entity.*;
 import com.onarandombox.MultiverseCore.api.*;
 import org.bukkit.event.player.*;
+import org.bukkit.event.server.BroadcastMessageEvent;
 import org.bukkit.inventory.CraftingInventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.CompassMeta;
@@ -32,11 +33,14 @@ import org.jetbrains.annotations.NotNull;
 import java.io.File;
 import java.security.SecureRandom;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.logging.Logger;
+
+import static org.bukkit.Bukkit.broadcastMessage;
 
 public final class Bed_PVP extends JavaPlugin implements Listener {
     private boolean Start = false;
@@ -44,6 +48,7 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
     private ExecutorService executorService = Executors.newFixedThreadPool(1); // 参数为线程池大小
     private MultiverseCore core = (MultiverseCore) Bukkit.getServer().getPluginManager().getPlugin("Multiverse-Core");
     Logger logger = getLogger();
+    HashMap<String, Boolean> player_online = new HashMap<>();
     @Override
     public void onEnable() {
         // Plugin startup logic
@@ -52,7 +57,7 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
         logger.info("""
                   
                 ***********************
-                *Bed-PVP V0.2-Snapshot*
+                *Bed-PVP V0.3-Snapshot*
                 *Loading......        *
                 ***********************
                  
@@ -177,6 +182,11 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
         if (Start) {
+            if (player_online != null && player_online.containsKey(player.getName())) {
+                player_online.put(player.getName(), true);
+                //使得离开对局的玩家可以继续游戏。
+                player.sendMessage(ChatColor.GOLD+"Welcome back to BED-PVP,"+player.getPlayer()+"!");
+            }
             // Set the player to spectator mode
             player.setGameMode(GameMode.SPECTATOR);
             player.getInventory().clear();
@@ -416,7 +426,34 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
             }
         }
     }
-
+    @EventHandler
+    public void onPlayerLeave(PlayerQuitEvent event){
+        if(player_online.containsKey(event.getPlayer().getName())){
+            player_online.put(event.getPlayer().getName(),false);
+        }
+        if(Bukkit.getOnlinePlayers().size()<=1){
+            Bukkit.broadcast(Component.text("OOPS!Now only one or less player online!If no player back after 2 hours,the game will stop!").color(TextColor.fromCSSHexString("#ff0000")));
+            if(Bukkit.getOnlinePlayers().size()!=0){
+                Bukkit.getOnlinePlayers().forEach(player -> {
+                    player.sendMessage("Most players leave the game,you can use command:bed-pvp-stop to stop the game.");
+                });
+            }
+            new BukkitRunnable() {
+                @Override
+                public void run() {
+                    if(Bukkit.getOnlinePlayers().size()<=1){
+                        Bukkit.broadcast(Component.text("No player back after 2 hours!The game will stop!").color(TextColor.fromCSSHexString("#ff0000")));
+                        Start=false;
+                        for(Player player:Bukkit.getOnlinePlayers()){
+                            player.kickPlayer(ChatColor.RED+"No player back to game!See you next time.");
+                            player_online.clear();
+                        }
+                        remadeWorld();
+                    }
+                }
+            }.runTaskLater(this, 72000);
+        }
+    }
     @EventHandler
     public void onPlayerDeath(EntityDeathEvent event) {
         // 确认死亡实体是玩家
@@ -428,7 +465,7 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
         EntityDamageEvent damageEvent = deadPlayer.getLastDamageCause();
         if (damageEvent.getCause() != EntityDamageEvent.DamageCause.ENTITY_EXPLOSION && damageEvent.getCause() != EntityDamageEvent.DamageCause.BLOCK_EXPLOSION) return;
         if (damageEvent != null) {
-            if (damageEvent.getCause() == EntityDamageEvent.DamageCause.ENTITY_EXPLOSION && damageEvent.getCause() == EntityDamageEvent.DamageCause.BLOCK_EXPLOSION) {
+            if (damageEvent.getCause() == EntityDamageEvent.DamageCause.ENTITY_EXPLOSION || damageEvent.getCause() == EntityDamageEvent.DamageCause.BLOCK_EXPLOSION) {
 
                     // 清除默认的掉落物（如果有的话，因为可能受游戏规则影响）
                     event.getDrops().clear();
@@ -448,6 +485,8 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
                             event.getDrops().add(armor);
                         }
                     }
+                    player_online.remove(event.getEventName());
+
 
                     // 注意：这样做会实际移除玩家物品栏中的物品，如果你只想模拟掉落而不真正拿走物品，
                     // 需要考虑复制物品而不是直接移动。
@@ -456,6 +495,7 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
             }
             // 如果不是被炸死，直接结束此方法
         }
+
          int onlinePlayersCount = 0;
         for (Player player : deadPlayer.getServer().getOnlinePlayers()) {
             if (player.getGameMode() != GameMode.SPECTATOR) { // 排除旁观者模式的玩家
@@ -696,7 +736,7 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
         if (label.equalsIgnoreCase("bed-pvp")) {
             sender.sendMessage("""
                     
-                    bed-pvp V0.2-Snapshot
+                    bed-pvp V0.3-Snapshot
                     By JohnRichard4096
                     Commands:
                         bed-pvp:To show command help
@@ -738,6 +778,9 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
 
                             // 倒计时结束，改变布尔值并发送广播及播放末影龙音效
                             Start = true;
+                            for (Player onlinePlayer : Bukkit.getOnlinePlayers()) {
+                                player_online.put(onlinePlayer.getName(), true);
+                            }
                             String titleMessage = ChatColor.translateAlternateColorCodes('&', "&aBed-PVP has been started!");
                             for (Player onlinePlayer : Bukkit.getOnlinePlayers()) {
                                 onlinePlayer.sendTitle(titleMessage, "", 10, 70, 20);
@@ -768,6 +811,8 @@ public final class Bed_PVP extends JavaPlugin implements Listener {
                 }
                 logger.info("Game stop!");
                 Start = false;
+                player_online.clear();
+
                 sender.sendMessage("Bed-PVP has been stopped!");
 
                 // Kick all online players
